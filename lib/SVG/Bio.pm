@@ -1,59 +1,36 @@
 package SVG::Bio;
 
+use strict;
+use warnings;
+
 use parent 'SVG';
 use Exporter 'import'; # gives you Exporter's import() method directly
-@EXPORT_OK = qw(Style Layout $Layouts $Styles);  # symbols to export on request
+our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
-our $Styles = {
-    _NA => {
-        'fill'           => 'rgb(0,0,0)',
-        'stroke'         => 'black',
-        'stroke-width'   =>  1,
-        'stroke-opacity' =>  1,
-        'fill-opacity'   =>  1,
-    },
-    arrow1 => {
-        'fill'           => 'rgb(255,0,0)',
-        'stroke'         => 'black',
-        'stroke-width'   =>  0,
-        'stroke-opacity' =>  1,
-        'fill-opacity'   =>  1,
-    },
-    arrow2 => {
-        'fill'           => 'rgb(0,255,0)',
-        'stroke'         => 'black',
-        'stroke-width'   =>  0,
-        'stroke-opacity' =>  1,
-        'fill-opacity'   =>  1,
-    },
-    genome1 => {
-        'stroke'         => 'grey',
-        'stroke-width'   =>  10,
-        'stroke-opacity' =>  1,
-    }
+use SVG::Bio::Stack;
 
-};
+our $VERSION = '0.2.0';
 
 our $Layouts = {
     gff => {
-        track_height => 200,
+        track_max_rows => 10,
+        track_padding => 50,
+        track_row_height => 100,
+        feature_rel_height => .8,
         track_base => undef,
-        feature_height => 40,
-        arrow_height => 80,
-        arrow_width => 80,
-        track_base_shift => 50,
-        stack_shift => 100,
-        stack_padding => 2,
-        #stacking => "packed", #TODO stacking on two strands
+        arrow_shaft_rel_height => .5,
+        arrow_head_rel_width => .5,
+        stack_padding => 20,
+        stacking => "packed", #TODO stacking on two strands
     },
     bam => {
-        track_height => 400,
+        track_max_rows => 100,
+        track_padding => 50,
+        track_row_height => 20,
+        feature_rel_height => 1,
         track_base => undef,
-        feature_height => 20,
-        arrow_height => 40,
-        arrow_width => 40,
-        track_base_shift => 0,
-        stack_shift => 20,
+        arrow_shaft_rel_height => 1,
+        arrow_head_rel_width => .5,
         stack_padding => 2,
         stacking => "packed",
     }
@@ -76,8 +53,8 @@ sub new{
         @_
     );
 
-    $self->{tracks} = {};
-    $self->{track_counter} = 0;
+    $self->{-tracks} = [];
+    $self->{-track_map} = {};
 
     return bless($self, __PACKAGE__);
 }
@@ -90,63 +67,56 @@ sub new{
 =cut
 
 sub track{
-    my ($self, %p) = (@_);
-    $self->{track_counter}++;
+    my ($svg, %p) = (@_);
+    $p{idx} = @{$svg->{-tracks}};
 
     if (defined $p{id} && $p{id} ne "") {
         # TODO: escape strange chars
-        die "Track ID $id already in use" if exists $self->{tracks}{$id};
+        die "Track ID $p{id} already in use" if defined $svg->{track_map}{$p{id}};
     }else {
-        $p{id} = "track_".($self->{track_counter});
+        $p{id} = "track_".$p{idx};
     }
 
-    # TODO: auto track-base
-    # TODO: track type based layouts
-    if ( $p{type} ){
-        $p{-layout} = {
-            %{Layout($p{type})},
-            %{$p{-layout}}
-        };
-    }
+    $p{-layout} = { %{Layout($p{-type})}, $p{-layout} ? %{$p{-layout}} : ()};
 
     # init stack for packing
-    if ($p{-layout}{stacking}) {
-        $p{-stack} = SVG::Bio::Stack->new( -layout => $p{-layout} );
+    $p{-stack} = SVG::Bio::Stack->new( -layout => $p{-layout} );
+
+    # TODO: auto track-base
+    # # compute ypos based on previous tracks
+
+    if (!defined($p{-layout}{track_base})) {
+        my $y = $p{-layout}{track_padding};
+        if ($p{idx}) { # not first track
+            my $ptl = $svg->{-tracks}[$p{idx}-1]{-layout};
+            $y+= $ptl->{track_base}
+                + $ptl->{track_height}
+                    + $ptl->{track_padding};
+        }
+        $p{-layout}{track_base} = $y;
     }
 
-    # compute ypos based on previous tracks
-    my $y;
-    foreach ( keys %{$self->{tracks}}) {
-        $y+= $self->{tracks}{$_}{-layout}{track_height};
-    }
+    $p{-is_track} = 1;
 
-
-    $self->{tracks}{$id} = $self->group(%p);
-
-
-
-    return $self->{tracks}{$id};
+    $svg->{-track_map}{$p{id}} = $p{idx};
+    return $svg->{-tracks}[$p{idx}] = $svg->group(%p);
 }
 
 
 
-=head2 Style
+=head2 track_refine
 
-get style from loaded Styles
+Call after track data has been loaded to adjust heights etc.
 
 =cut
 
-sub Style{
-    my ($self, $style) = (@_, "_NA");
-    unless ( ref $self || $self eq 'SVG::Bio') {
-        $style = $self;
-    }
-    $style //= "_gff";
-
-    unless (exists $Styles->{$style}) {
-        die "unknown style $style";
-    }
-    return $Styles->{$style};
+sub SVG::Element::track_refine{
+    my ($self) = @_;
+    $self->is_track_or_die;
+    my $l = $self->{-layout};
+    my $rows = @{$self->stack->{stack}};
+    $rows = $rows > $l->{track_max_rows} ? $l->{track_max_rows} : $rows;
+    $l->{track_height} = $self->stack->row2y($rows);
 }
 
 
@@ -157,11 +127,11 @@ get layout from loaded Layouts
 =cut
 
 sub Layout{
-    my ($self, $layout) = (@_, "_NA");
-    unless ( ref $self || $self eq 'SVG::Bio') {
+    my ($self, $layout) = (@_);
+    unless ( $self && (ref $self || $self eq 'SVG::Bio')) {
         $layout = $self;
     }
-    $layout //= "_NA";
+    $layout //= "gff";
 
     unless (exists $Layouts->{$layout}) {
         die "unknown layout $layout";
@@ -170,63 +140,12 @@ sub Layout{
 }
 
 
-=head2 arrow
-
-add an arrow to a track. (FROM, TO, style => STYLE, yshift => +-NUM)
-
-=cut
-
-sub SVG::Element::arrow{
-    my ($self, $f, $t, $o, %p) = (@_);
-    die "from and to required" unless defined $f and defined $t;
-
-    my %l = (%{$self->{'-layout'}}, %{$p{-layout}});
-    my $ap = $self->_arrow_path($f, $t, %l);
-
-    my $y  = $l{track_base};
-
-    $self->polygon(
-        %$ap,
-        $p{style} ? (style => $p{style}) : (),
-        ( $o < 0 || $o eq '-') ? (transform => "rotate(180 ".($f+($t-$f)/2)." $y)") : (),
-    );
-}
-
-
-=head2 _arrow_path
-
-returns an arrow_path backbone based on (from, to, strand, -layoutopts => VAL ...);
-
-=cut
-
-sub SVG::Element::_arrow_path{
-    my ($self, $f, $t, %l) = (@_);
-
-    my $aw = $l{arrow_width}/2;
-    my $ah = $l{arrow_height}/2;
-    my $fh = $l{feature_height}/2;
-    my $y  = $l{track_base}-$l{track_base_shift};
-
-    my $path;
-
-    my @x = ($f,     $t-$aw, $t-$aw, $t, $t-$aw, $t-$aw, $f    );
-    my @y = ($y+$fh, $y+$fh, $y+$ah, $y, $y-$ah, $y-$fh, $y-$fh);
-
-
-    my $path = $self->get_path(
-        x => \@x,
-        y => \@y,
-        -type => 'polygon');
-    return $path;
-}
-
-
 =head2 block
 
   $track->block(
-    from => X,
-    length => L, # or
-    to => Y,
+    x => FROM,
+    width => LENGTH, # or
+    to => TO, # convenience, used to compute width
     # optional
     strand => "-" or -1 # everything else is considered forward
     -layout => {},
@@ -236,118 +155,116 @@ sub SVG::Element::_arrow_path{
 
 sub SVG::Element::block{
     my ($self, %p) = (@_);
+    $self->is_track_or_die;
 
-    my %l = (%{$self->{'-layout'}}, %{$p{-layout}});
-    $p{length} //= $p{from}-$p{to}+1;
+    $p{x} // die __PACKAGE__."->block(): 'x' required\n";
+    defined($p{width}) xor defined($p{to}) or die __PACKAGE__."->arrow(): either 'width' or 'to' required\n";
 
-    my $stack_shift = 0;
-    if ($self->{-stack}) {
+    my $l = $p{-layout} = {%{$self->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
 
-        my $stack_spot = $self->{-stack}->add(pos => $p{from}, length => $p{length});
-        $stack_shift = $l{stack_shift} * $stack_spot;
+    $p{to} //= $p{x}+$p{width};
+    $p{width} //= $p{to}-$p{x};
+
+    my $row = $self->stack->add(%p);
+    return if $l->{track_max_rows} && $row > $l->{track_max_rows};
+
+    $p{y} //= $l->{track_base} + $self->stack->row2y($row);
+
+    $p{height} //= $l->{track_row_height} * $l->{feature_rel_height};
+
+    if ( $p{-strand} && ( $p{-strand} eq '-' || $p{-strand} eq '-1' )){
+        $p{class} = defined($p{class}) && length($p{class}) ? $p{class}." rc" : "rc";
     }
 
-    my $rc = ($p{strand}<0 || $p{strand} eq '-');
-    $self->rect(
-        x => $p{from},
-        y => $l{track_base}-$l{track_base_shift}+$stack_shift,
-        height => $l{feature_height},
-        width => $p{length},
-        class => $p{class},
+    $self->rect(%p);
+}
+
+
+=head2 arrow
+
+  $track->arrow(
+    x => FROM,
+    width => LENGTH, # or
+    to => TO, # convenience, used to compute width
+    # optional
+    strand => "-" or -1 # everything else is considered forward
+    -layout => {},
+  );
+
+=cut
+
+sub SVG::Element::arrow{
+    my ($self, %p) = (@_);
+    $self->is_track_or_die;
+
+    $p{x} // die __PACKAGE__."->arrow(): 'x' required\n";
+    defined($p{width}) xor defined($p{to}) or die __PACKAGE__."->arrow(): either 'width' or 'to' required\n";
+
+    my $l = $p{-layout} = {%{$self->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
+
+    $p{to} //= $p{x}+$p{width};
+    $p{width} //= $p{to}-$p{x};
+
+    my $x = $p{x};
+    my $t = $p{to};
+
+    my $row = $self->stack->add(%p);
+    return if $l->{track_max_rows} && $row > $l->{track_max_rows};
+
+    my $y = $l->{track_base} + $self->stack->row2y($row);
+
+    my $fh = $l->{track_row_height} * $l->{feature_rel_height};
+    my $as = ($fh - ($fh * $l->{arrow_shaft_rel_height}))/2;
+    my $ah = $fh * $l->{arrow_head_rel_width};
+
+    my @y = ($y+$as, $y+$as, $y, $y+$fh/2, $y+$fh, $y+$fh-$as, $y+$fh-$as);
+    my @x = ($x, $t-$ah, $t-$ah, $t, $t-$ah, $t-$ah, $x);
+
+    my $ap = $self->get_path(
+        x => \@x,
+        y => \@y,
+        -type => 'polygon');
+
+    my $rc = ($p{-strand} && ( $p{-strand} eq '-' || $p{-strand} eq '-1' ));
+    if ($rc){
+        $p{class} = defined($p{class}) && length($p{class}) ? $p{class}." rc" : "rc";
+    }
+
+    $self->polygon(
+        %$ap,
+        %p, # pass-through class, style, etc
+        $rc ? (transform => "rotate(180 ".($x+($t-$x)/2)." ".($y+$fh/2).")") : (),
     );
 }
 
-# =head2
-
-# =head2 get_track
-
-# get track by ID or last (current) if no ID given.
-
-# =cut
-
-# sub get_track{
-#     my ($self, $id) = (shift,-1);
-#     die "no tracks availabe" unless @{$self->tracks};
-#     return $self->{tracks}{$id}
-# }
-
-
-# =head2 get_tracks
-
-# Return tracks
-
-# =cut
-
-# sub get_tracks{
-#     my $self=shift;
-#     return $self->{tracks};
-# }
-
-package SVG::Bio::Stack;
-
-=head2 new
+=head2 stack
 
 =cut
 
-sub new{
-    my $class = shift;
-    my $self = {
-        stack => [0],
-        pos => 0,
-        @_
-    };
+sub SVG::Element::stack{
+    my ($self) = @_;
+    $self->is_track_or_die;
 
-    bless $self, $class;
+    return $self->{-stack};
 }
 
-=head2 add (pos => INT, length => INT)
+=head2 is_track
 
 =cut
 
-sub add{
-    my ($self, %p) = (@_);
-    $self->move(to => $p{pos});
-    my $spot = $self->spot();
-    $self->{stack}[$spot] = $p{length}+$self->{-layout}{stack_padding};
-    return $spot;
+sub SVG::Element::is_track{
+    my ($self) = @_;
+    return exists $self->{-is_track} && $self->{-is_track};
 }
 
-=head2 move
+=head2 is_track_or_die
 
 =cut
 
-sub move{
-    my ($self, %p) = (@_);
-    if (defined $p{to}) {
-        $p{by} = $p{to} - $self->{pos};
-        $self->{pos} = $p{to};
-    }elsif (defined $p{by}) {
-        $self->{pos}+=$p{by};
-    }else{
-        die __PACKAGE__."->move: Either 'to' or 'by' required\n";
-    }
-
-    foreach ( @{$self->{stack}} ) {
-        $_-= $p{by};
-        $_ = 0 if $_ < 0;
-    }
+sub SVG::Element::is_track_or_die{
+    my ($self) = @_;
+    $self->is_track() || die __PACKAGE__."->method can only be called on tracks";
 }
 
-=head2 spot
-
-=cut
-
-sub spot{
-    my ($self, %p) = (@_);
-    my $spot;
-    for (my $i=0; $i<@{$self->{stack}}; $i++ ) {
-        if ( $self->{stack}[$i] == 0) {
-            $spot = $i;
-            last;
-        }
-    }
-    $spot //= @{$self->{stack}}; # append stack
-    return $spot;
-}
 
 1;
