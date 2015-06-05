@@ -2,7 +2,7 @@ package SVG::Bio;
 
 use parent 'SVG';
 use Exporter 'import'; # gives you Exporter's import() method directly
-@EXPORT_OK = qw(Style $Styles);  # symbols to export on request
+@EXPORT_OK = qw(Style Layout $Layouts $Styles);  # symbols to export on request
 
 our $Styles = {
     _NA => {
@@ -33,6 +33,32 @@ our $Styles = {
     }
 
 };
+
+our $Layouts = {
+    gff => {
+        track_height => 200,
+        track_base => undef,
+        feature_height => 40,
+        arrow_height => 80,
+        arrow_width => 80,
+        track_base_shift => 50,
+        stack_shift => 100,
+        stack_padding => 2,
+        #stacking => "packed", #TODO stacking on two strands
+    },
+    bam => {
+        track_height => 400,
+        track_base => undef,
+        feature_height => 20,
+        arrow_height => 40,
+        arrow_width => 40,
+        track_base_shift => 0,
+        stack_shift => 20,
+        stack_padding => 2,
+        stacking => "packed",
+    }
+};
+
 
 
 =head2 new
@@ -65,35 +91,40 @@ sub new{
 
 sub track{
     my ($self, %p) = (@_);
-    $self->{track_counter}++;    
+    $self->{track_counter}++;
 
     if (defined $p{id} && $p{id} ne "") {
         # TODO: escape strange chars
         die "Track ID $id already in use" if exists $self->{tracks}{$id};
     }else {
-        $p{id} = "track_".($self->{track_counter});  
+        $p{id} = "track_".($self->{track_counter});
     }
 
     # TODO: auto track-base
     # TODO: track type based layouts
-    $p{-layout} = {
-        track_base => 100,
-        feature_height => 20,
-        arrow_height => 40,
-        arrow_width => 40,
-        track_base_shift => 50,
-        stack_shift => 20,
-        stack_padding => 2,
-        %{$p{-layout}}
-    };
+    if ( $p{type} ){
+        $p{-layout} = {
+            %{Layout($p{type})},
+            %{$p{-layout}}
+        };
+    }
 
-    if ($p{-valign}) {
+    # init stack for packing
+    if ($p{-layout}{stacking}) {
         $p{-stack} = SVG::Bio::Stack->new( -layout => $p{-layout} );
     }
 
-    
+    # compute ypos based on previous tracks
+    my $y;
+    foreach ( keys %{$self->{tracks}}) {
+        $y+= $self->{tracks}{$_}{-layout}{track_height};
+    }
+
+
     $self->{tracks}{$id} = $self->group(%p);
-    
+
+
+
     return $self->{tracks}{$id};
 }
 
@@ -110,14 +141,33 @@ sub Style{
     unless ( ref $self || $self eq 'SVG::Bio') {
         $style = $self;
     }
-    $style //= "_NA";
+    $style //= "_gff";
 
     unless (exists $Styles->{$style}) {
         die "unknown style $style";
     }
-    return wantarray ? (style => $Styles->{$style}) : $Styles->{$style};
+    return $Styles->{$style};
 }
 
+
+=head2 Layout
+
+get layout from loaded Layouts
+
+=cut
+
+sub Layout{
+    my ($self, $layout) = (@_, "_NA");
+    unless ( ref $self || $self eq 'SVG::Bio') {
+        $layout = $self;
+    }
+    $layout //= "_NA";
+
+    unless (exists $Layouts->{$layout}) {
+        die "unknown layout $layout";
+    }
+    return $Layouts->{$layout};
+}
 
 
 =head2 arrow
@@ -152,9 +202,9 @@ returns an arrow_path backbone based on (from, to, strand, -layoutopts => VAL ..
 sub SVG::Element::_arrow_path{
     my ($self, $f, $t, %l) = (@_);
 
-    my $aw = $l{arrow_width};
-    my $ah = $l{arrow_height};
-    my $fh = $l{feature_height};
+    my $aw = $l{arrow_width}/2;
+    my $ah = $l{arrow_height}/2;
+    my $fh = $l{feature_height}/2;
     my $y  = $l{track_base}-$l{track_base_shift};
 
     my $path;
@@ -162,7 +212,7 @@ sub SVG::Element::_arrow_path{
     my @x = ($f,     $t-$aw, $t-$aw, $t, $t-$aw, $t-$aw, $f    );
     my @y = ($y+$fh, $y+$fh, $y+$ah, $y, $y-$ah, $y-$fh, $y-$fh);
 
-    
+
     my $path = $self->get_path(
         x => \@x,
         y => \@y,
@@ -272,7 +322,7 @@ sub move{
         $p{by} = $p{to} - $self->{pos};
         $self->{pos} = $p{to};
     }elsif (defined $p{by}) {
-        $self->{pos}+=$p{by};        
+        $self->{pos}+=$p{by};
     }else{
         die __PACKAGE__."->move: Either 'to' or 'by' required\n";
     }
@@ -297,7 +347,7 @@ sub spot{
         }
     }
     $spot //= @{$self->{stack}}; # append stack
-    return $spot;            
+    return $spot;
 }
 
 1;
