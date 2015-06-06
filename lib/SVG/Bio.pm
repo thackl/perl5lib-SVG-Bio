@@ -9,7 +9,7 @@ our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
 use SVG::Bio::Stack;
 
-our $VERSION = '0.2.0';
+our $VERSION = '0.2.1';
 
 our $Layouts = {
     gff => {
@@ -33,7 +33,7 @@ our $Layouts = {
         arrow_head_rel_width => .5,
         stack_padding => 2,
         stacking => "packed",
-    }
+    },
 };
 
 
@@ -68,13 +68,13 @@ sub new{
 
 sub track{
     my ($svg, %p) = (@_);
-    $p{idx} = @{$svg->{-tracks}};
+    $p{-idx} = @{$svg->{-tracks}};
 
     if (defined $p{id} && $p{id} ne "") {
         # TODO: escape strange chars
         die "Track ID $p{id} already in use" if defined $svg->{track_map}{$p{id}};
     }else {
-        $p{id} = "track_".$p{idx};
+        $p{id} = "track_".$p{-idx};
     }
 
     $p{-layout} = { %{Layout($p{-type})}, $p{-layout} ? %{$p{-layout}} : ()};
@@ -87,8 +87,8 @@ sub track{
 
     if (!defined($p{-layout}{track_base})) {
         my $y = $p{-layout}{track_padding};
-        if ($p{idx}) { # not first track
-            my $ptl = $svg->{-tracks}[$p{idx}-1]{-layout};
+        if ($p{-idx}) { # not first track
+            my $ptl = $svg->{-tracks}[$p{-idx}-1]{-layout};
             $y+= $ptl->{track_base}
                 + $ptl->{track_height}
                     + $ptl->{track_padding};
@@ -98,8 +98,8 @@ sub track{
 
     $p{-is_track} = 1;
 
-    $svg->{-track_map}{$p{id}} = $p{idx};
-    return $svg->{-tracks}[$p{idx}] = $svg->group(%p);
+    $svg->{-track_map}{$p{id}} = $p{-idx};
+    return $svg->{-tracks}[$p{-idx}] = $svg->group(%p);
 }
 
 
