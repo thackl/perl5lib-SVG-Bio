@@ -9,7 +9,7 @@ use parent 'SVG::Element::Bio';
 use Exporter 'import'; # gives you Exporter's import() method directly
 our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
-our $VERSION = '0.5.0';
+our $VERSION = '0.5.1';
 
 
 =head2 new
@@ -38,7 +38,7 @@ sub new{
         height => 200 # bogus
     );
 
-    return bless($self, __PACKAGE__);
+    return bless($self);
 }
 
 1;

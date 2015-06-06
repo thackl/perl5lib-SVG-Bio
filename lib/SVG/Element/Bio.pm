@@ -9,7 +9,7 @@ our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
 use SVG::Bio::Stack;
 
-our $VERSION = '0.5.0';
+our $VERSION = '0.5.1';
 
 our $Layouts = {
     DEF => {
@@ -43,36 +43,6 @@ $Layouts->{bam} = {
 };
 
 
-# =head2 new
-
-# simple handle constructor
-
-# =cut
-
-# sub new{
-#     my $class = shift;
-
-#     my $self = $class->SUPER::new(
-#         width  => 1000,
-#         height => 200,
-#         @_
-#     );
-
-#     # set it up in case we need it in canvas
-#     $self->defs()->clipPath(
-#         id => "canvas-clip"
-#     )->rect(
-#         id => "canvas-clip-rect",
-#         y => 0,
-#         x => 0, # bogus
-#         width => 1000, # bogus
-#         height => 200 # bogus
-#     );
-
-#     return bless($self, __PACKAGE__);
-# }
-
-
 =head2 canvas
 
 =cut
@@ -90,7 +60,7 @@ sub canvas{
         -track_map => {},
     );
 
-    bless $self, __PACKAGE__;
+    return bless($self);
 }
 
 
@@ -135,7 +105,8 @@ sub track{
 
     $svg->{-track_map}{$p{id}} = $p{-idx};
     my $self = $svg->{-tracks}[$p{-idx}] = $svg->group(%p);
-    return bless $self, __PACKAGE__;
+
+    return bless($self);
 }
 
 
@@ -212,7 +183,7 @@ sub block{
         $p{class} = defined($p{class}) && length($p{class}) ? $p{class}." rc" : "rc";
     }
 
-    return bless $self->rect(%p), __PACKAGE__;
+    return bless($self->rect(%p));
 }
 
 
@@ -266,11 +237,11 @@ sub arrow{
         $p{class} = defined($p{class}) && length($p{class}) ? $p{class}." rc" : "rc";
     }
 
-    return bless $self->polygon(
+    return bless($self->polygon(
         %$ap,
         %p, # pass-through class, style, etc
         $rc ? (transform => "rotate(180 ".($x+($t-$x)/2)." ".($y+$fh/2).")") : (),
-    ), __PACKAGE__;
+    ));
 }
 
 
@@ -303,7 +274,7 @@ sub axis{
 
     $p{y} //= $y;
 
-    my $axis = bless($track->group(%p), __PACKAGE__);
+    my $axis = bless($track->group(%p));
 
     $axis->line(
         x1 => $p{x},
