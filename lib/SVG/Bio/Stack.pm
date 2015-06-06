@@ -27,7 +27,7 @@ sub new{
 sub add{
     my ($self, %p) = (@_);
     
-    $self->move(x => $p{x});
+    $self->move(x => defined($p{x}) ? $p{x} : $p{x1});
     my $spot = $self->spot();
     $self->{stack}[$spot] = $p{width}+$self->{-layout}{stack_padding};
     return $spot;
@@ -45,7 +45,7 @@ sub move{
     }elsif (defined $p{by}) {
         $self->{x}+=$p{by};
     }else{
-        die __PACKAGE__."->move: Either 'x' or 'by' required\n";
+        die __PACKAGE__."->move: Either 'x/x1' or 'by' required\n";
     }
 
     foreach ( @{$self->{stack}} ) {
