@@ -7,9 +7,10 @@ use parent 'SVG::Element';
 use Exporter 'import'; # gives you Exporter's import() method directly
 our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
+use List::Util;
 use SVG::Bio::Stack;
 
-our $VERSION = '0.5.1';
+our $VERSION = '0.6.1';
 
 our $Layouts = {
     DEF => {
@@ -42,6 +43,11 @@ $Layouts->{bam} = {
     )
 };
 
+$Layouts->{plot} = {
+    %{$Layouts->{DEF}},(
+        track_height => 200,
+    )
+};
 
 =head2 canvas
 
@@ -93,7 +99,10 @@ sub track{
     if (!defined($p{-layout}{track_base})) {
         my $y = $p{-layout}{track_padding};
         if ($p{-idx}) { # not first track
-            my $ptl = $svg->{-tracks}[$p{-idx}-1]{-layout};
+            my $pt = $svg->{-tracks}[$p{-idx}-1];
+
+            $pt->track_refine;
+            my $ptl = $pt->{-layout};
             $y+= $ptl->{track_base}
                 + $ptl->{track_height}
                     + $ptl->{track_padding};
@@ -121,8 +130,12 @@ sub track_refine{
     my ($self) = @_;
     $self->is_track_or_die;
     my $l = $self->{-layout};
+    return if defined ($l->{track_height});
+
     my $rows = @{$self->stack->{stack}};
-    $rows = $rows > $l->{track_max_rows} ? $l->{track_max_rows} : $rows;
+    if ($l->{track_max_rows}) {
+        $rows = $rows > $l->{track_max_rows} ? $l->{track_max_rows} : $rows;
+    }
     $l->{track_height} = $self->stack->row2y($rows);
 }
 
@@ -287,6 +300,60 @@ sub axis{
 
     return $axis;
 }
+
+
+=head2 curve
+
+  $track->curve(
+    x => [x1, x2, x3, ...],
+    y => [y1, y2, y3, ...],
+  )
+
+=cut
+
+sub curve{
+    my ($track, %p) = (@_);
+    $track->is_track_or_die;
+
+    defined($p{x}) && ref($p{x}) eq 'ARRAY' || die __PACKAGE__."->curve(): [x] vector required\n";
+    defined($p{y}) && ref($p{y}) eq 'ARRAY' || die __PACKAGE__."->curve(): [y] vector required\n";
+
+    # scale y
+    my $l = $p{-layout} = {%{$track->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
+    my $ys = $l->{track_base};
+
+    my @y = @{$p{y}};
+
+    if(!defined($p{-ymin}) || !defined($p{-ymax})) {
+        $p{-ymax} //= List::Util::max(@y);
+        $p{-ymin} //= List::Util::min(@y);
+    }
+
+    my $d = $p{-ymax}-$p{-ymin};
+    my $s = $l->{track_height} / $d;
+
+    @y = map{ ($_ * $s) + $ys }@y;
+
+    my $points = $track->get_path(
+        x       => $p{x},
+        y       => \@y,
+        -type   => 'polyline',
+        -closed => 'false',
+    );
+
+    delete($p{x});
+    delete($p{y});
+
+    my $tl = ($l->{track_height} + $ys);
+    my $self = $track->polyline(
+        %$points,
+        class => 'curve',
+       # transform => "translate($tl,0) scale(-1,1)"
+    );
+
+    return bless($self);
+}
+
 
 =head2 stack
 
