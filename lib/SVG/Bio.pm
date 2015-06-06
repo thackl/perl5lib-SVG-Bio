@@ -12,7 +12,7 @@ use SVG::Bio::Stack;
 our $VERSION = '0.2.1';
 
 our $Layouts = {
-    gff => {
+    DEF => {
         track_max_rows => 10,
         track_padding => 50,
         track_row_height => 100,
@@ -22,18 +22,24 @@ our $Layouts = {
         arrow_head_rel_width => .5,
         stack_padding => 20,
         stacking => "packed", #TODO stacking on two strands
+        axis_ticks => 10,
+        axis_tick_height => 15,
     },
-    bam => {
+};
+
+$Layouts->{gff} = {
+    %{$Layouts->{DEF}},
+};
+
+$Layouts->{bam} = {
+    %{$Layouts->{DEF}},
+    (
         track_max_rows => 100,
-        track_padding => 50,
         track_row_height => 20,
         feature_rel_height => 1,
-        track_base => undef,
         arrow_shaft_rel_height => 1,
-        arrow_head_rel_width => .5,
         stack_padding => 2,
-        stacking => "packed",
-    },
+    )
 };
 
 
