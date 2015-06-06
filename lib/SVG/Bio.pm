@@ -9,7 +9,7 @@ our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
 use SVG::Bio::Stack;
 
-our $VERSION = '0.2.1';
+our $VERSION = '0.3.0';
 
 our $Layouts = {
     DEF => {
@@ -164,7 +164,7 @@ sub SVG::Element::block{
     $self->is_track_or_die;
 
     $p{x} // die __PACKAGE__."->block(): 'x' required\n";
-    defined($p{width}) xor defined($p{to}) or die __PACKAGE__."->arrow(): either 'width' or 'to' required\n";
+    defined($p{width}) xor defined($p{to}) or die __PACKAGE__."->block(): either 'width' or 'to' required\n";
 
     my $l = $p{-layout} = {%{$self->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
 
@@ -243,6 +243,48 @@ sub SVG::Element::arrow{
     );
 }
 
+
+=head2 axis
+
+  axis(
+    x => FROM,
+    to => TO, #or
+    width => WIDTH # convenience for x2
+  );
+
+=cut
+
+sub SVG::Element::axis{
+    my ($track, %p) = (@_);
+    $track->is_track_or_die;
+
+    $p{x} // die __PACKAGE__."->axis(): 'x' required\n";
+    defined($p{width}) xor defined($p{to}) or die __PACKAGE__."->axis(): either 'width' or 'to' required\n";
+
+    my $l = $p{-layout} = {%{$track->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
+
+    $p{to} //= $p{x}+$p{width};
+    $p{width} //= $p{to}-$p{x};
+
+    my $row = $track->stack->add(%p);
+    return if $l->{track_max_rows} && $row > $l->{track_max_rows};
+
+    my $y = $l->{track_base} + $track->stack->row2y($row);
+
+    $p{y} //= $y;
+
+    my $axis = $track->group(%p);
+
+    $axis->line(
+        x1 => $p{x},
+        x2 => $p{to},
+        y1 => $y,
+        y2 => $y
+    );
+
+    $axis->ticks(%p);
+}
+
 =head2 stack
 
 =cut
@@ -272,5 +314,41 @@ sub SVG::Element::is_track_or_die{
     $self->is_track() || die __PACKAGE__."->method can only be called on tracks";
 }
 
+
+=head2 SVG::Element::ticks
+
+=cut
+
+sub SVG::Element::ticks{
+    my ($self, %p) = (@_);
+
+    $p{x} // die __PACKAGE__."->ticks(): 'x' required\n";
+    defined($p{width}) or defined($p{to}) or die __PACKAGE__."->ticks(): either 'width' or 'to' required\n";
+
+    my $l = $p{-layout} = {%{$self->{'-layout'}}, $p{-layout} ? %{$p{-layout}} : ()};
+
+    return unless $l->{axis_ticks};
+
+    $p{to} //= $p{x}+$p{width};
+    $p{width} //= $p{to}-$p{x};
+
+    my $d = int($p{width} / $l->{axis_ticks});
+    my $m = 10 ** (length($d)-1);
+    my $i = $m;
+    $i = 2.5 * $m if $d/$m > 2.5;
+    $i = 5 * $m if $d/$m > 5;
+
+    my $k = (int($p{x}/$i) +1) * $i;
+    $k+=$i if $k-$p{x} < $i/2;
+    for ( my $j=$k; $j<$p{to}-($i/2); $j+=$i) {
+        $self->line(
+            x1 => $j,
+            x2 => $j,
+            y1 => $p{y},
+            y2 => $p{y}+$l->{axis_tick_height},
+        )
+    }
+
+}
 
 1;
