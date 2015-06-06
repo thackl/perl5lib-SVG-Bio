@@ -9,7 +9,7 @@ our @EXPORT_OK = qw(Layout $Layouts);  # symbols to export on request
 
 use SVG::Bio::Stack;
 
-our $VERSION = '0.3.0';
+our $VERSION = '0.4.0';
 
 our $Layouts = {
     DEF => {
@@ -43,7 +43,6 @@ $Layouts->{bam} = {
 };
 
 
-
 =head2 new
 
 simple handle constructor
@@ -59,10 +58,37 @@ sub new{
         @_
     );
 
-    $self->{-tracks} = [];
-    $self->{-track_map} = {};
+    # set it up in case we need it in canvas
+    $self->defs()->clipPath(
+        id => "canvas-clip"
+    )->rect(
+        id => "canvas-clip-rect",
+        y => 0,
+        x => 0, # bogus
+        width => 1000, # bogus
+        height => 200 # bogus
+    );
 
     return bless($self, __PACKAGE__);
+}
+
+
+=head2 canvas
+
+=cut
+
+sub canvas{
+    my ($svg, %p) = (@_);
+
+    return $svg->group(
+        id => "canvas_0",
+        class => "canvas",
+        'clip-path' => "url(#canvas-clip)",
+        %p,
+        -is_canvas => 1,
+        -tracks => [],
+        -track_map => {},
+    );
 }
 
 
@@ -72,8 +98,9 @@ sub new{
 
 =cut
 
-sub track{
+sub SVG::Element::track{
     my ($svg, %p) = (@_);
+    $svg->is_canvas_or_die;
     $p{-idx} = @{$svg->{-tracks}};
 
     if (defined $p{id} && $p{id} ne "") {
@@ -314,6 +341,24 @@ sub SVG::Element::is_track_or_die{
     $self->is_track() || die __PACKAGE__."->method can only be called on tracks";
 }
 
+
+=head2 is_canvas
+
+=cut
+
+sub SVG::Element::is_canvas{
+    my ($self) = @_;
+    return exists $self->{-is_canvas} && $self->{-is_canvas};
+}
+
+=head2 is_canvas_or_die
+
+=cut
+
+sub SVG::Element::is_canvas_or_die{
+    my ($self) = @_;
+    $self->is_canvas() || die __PACKAGE__."->method can only be called on canvas";
+}
 
 =head2 SVG::Element::ticks
 
