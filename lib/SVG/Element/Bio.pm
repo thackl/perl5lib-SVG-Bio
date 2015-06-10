@@ -19,8 +19,8 @@ our $Layouts = {
         track_row_height => 100,
         feature_rel_height => .8,
         track_base => undef,
-        arrow_shaft_rel_height => .5,
-        arrow_head_rel_width => .5,
+        arrow_rel_height => 0,
+        arrow_rel_width => .75,
         stack_padding => 20,
         stacking => "packed", #TODO stacking on two strands
         axis_ticks => 10,
@@ -38,7 +38,7 @@ $Layouts->{bam} = {
         track_max_rows => 100,
         track_row_height => 20,
         feature_rel_height => 1,
-        arrow_shaft_rel_height => 1,
+        arrow_rel_height => 1,
         stack_padding => 2,
     )
 };
@@ -188,9 +188,11 @@ sub block{
     my $row = $self->stack->add(%p);
     return if $l->{track_max_rows} && $row > $l->{track_max_rows};
 
-    $p{y} //= $l->{track_base} + $self->stack->row2y($row);
+    my $fh = $l->{track_row_height} * $l->{feature_rel_height};
+    my $fh_diff = ($l->{track_row_height} - $fh)/2;
+    $p{y} //= $l->{track_base} + $self->stack->row2y($row) + $fh_diff;
 
-    $p{height} //= $l->{track_row_height} * $l->{feature_rel_height};
+    $p{height} //= $fh;
 
     if ( $p{-strand} && ( $p{-strand} eq '-' || $p{-strand} eq '-1' )){
         $p{class} = defined($p{class}) && length($p{class}) ? $p{class}." rc" : "rc";
@@ -231,14 +233,27 @@ sub arrow{
     my $row = $self->stack->add(%p);
     return if $l->{track_max_rows} && $row > $l->{track_max_rows};
 
-    my $y = $l->{track_base} + $self->stack->row2y($row);
-
     my $fh = $l->{track_row_height} * $l->{feature_rel_height};
-    my $as = ($fh - ($fh * $l->{arrow_shaft_rel_height}))/2;
-    my $ah = $fh * $l->{arrow_head_rel_width};
+    my $fh_diff = ($l->{track_row_height} - $fh)/2;
+    my $y = $l->{track_base} + $self->stack->row2y($row) + $fh_diff;
 
-    my @y = ($y+$as, $y+$as, $y, $y+$fh/2, $y+$fh, $y+$fh-$as, $y+$fh-$as);
-    my @x = ($x, $t-$ah, $t-$ah, $t, $t-$ah, $t-$ah, $x);
+    my $as = ($fh * $l->{arrow_rel_height})/2;
+    my $ah = $fh * $l->{arrow_rel_width};
+    my $yfh = $y+$fh;
+    my $tah = $t-$ah;
+
+    my @y = ($y, $y,
+             $as ? $y-$as : (),
+             $ah ? $y+($fh/2) : (),
+             $as ? $yfh+$as : (),
+             $yfh, $yfh
+         );
+    my @x = ($x, $tah,
+             $as ? $tah : (),
+             $ah ? $t : (),
+             $as ? $tah : (),
+             $tah, $x
+         );
 
     my $ap = $self->get_path(
         x => \@x,
