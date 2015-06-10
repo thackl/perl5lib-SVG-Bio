@@ -26,7 +26,8 @@ sub new{
 
 sub add{
     my ($self, %p) = (@_);
-    
+
+    return 0 unless $self->{-layout}{stacking};
     $self->move(x => defined($p{x}) ? $p{x} : $p{x1});
     my $spot = $self->spot();
     $self->{stack}[$spot] = $p{width}+$self->{-layout}{stack_padding};
