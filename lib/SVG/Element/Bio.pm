@@ -359,11 +359,10 @@ sub curve{
     delete($p{x});
     delete($p{y});
 
-    my $tl = ($l->{track_height} + $ys);
     my $self = $track->polyline(
         %$points,
         class => 'curve',
-       # transform => "translate($tl,0) scale(-1,1)"
+        %p,
     );
 
     return bless($self);
