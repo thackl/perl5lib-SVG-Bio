@@ -347,7 +347,7 @@ sub curve{
     my $d = $p{-ymax}-$p{-ymin};
     my $s = $l->{track_height} / $d;
 
-    @y = map{ ($_ * $s) + $ys }@y;
+    @y = map{ (($p{-ymax}-$_) * $s) + $ys }@y;
 
     my $points = $track->get_path(
         x       => $p{x},
