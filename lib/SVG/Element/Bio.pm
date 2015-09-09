@@ -241,6 +241,7 @@ sub arrow{
     my $ah = $fh * $l->{arrow_rel_width};
     my $yfh = $y+$fh;
     my $tah = $t-$ah;
+    $tah = $p{x} if $tah < $p{x};
 
     my @y = ($y, $y,
              $as ? $y-$as : (),
