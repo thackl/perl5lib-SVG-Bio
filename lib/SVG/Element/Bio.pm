@@ -302,13 +302,15 @@ sub axis{
 
     $p{y} //= $y;
 
+    $p{class} = defined $p{class} ? "axis $p{class}" : "axis";
     my $axis = bless($track->group(%p));
 
     $axis->line(
         x1 => $p{x},
         x2 => $p{to},
         y1 => $y,
-        y2 => $y
+        y2 => $y,
+        class => "axis_line"
     );
 
     $axis->ticks(%p);
@@ -455,6 +457,7 @@ sub ticks{
             x2 => $j,
             y1 => $p{y},
             y2 => $p{y}+$l->{axis_tick_height},
+            class => "axis_tick",
         )
     }
 }
