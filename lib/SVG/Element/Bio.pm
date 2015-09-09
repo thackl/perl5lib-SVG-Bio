@@ -15,7 +15,7 @@ our $VERSION = '0.6.1';
 our $Layouts = {
     DEF => {
         track_max_rows => 10,
-        track_padding => 50,
+        track_padding => 100,
         track_row_height => 100,
         feature_rel_height => .8,
         track_base => undef,
@@ -342,6 +342,13 @@ sub curve{
     if(!defined($p{-ymin}) || !defined($p{-ymax})) {
         $p{-ymax} //= List::Util::max(@y);
         $p{-ymin} //= List::Util::min(@y);
+    }
+
+    if ($p{-fillable}) {
+        unshift @{$p{x}}, $p{x}->[0];
+        unshift @y, $p{-ymin};
+        push @{$p{x}}, $p{x}->[@{$p{x}}-1];
+        push @y, $p{-ymin};
     }
 
     my $d = $p{-ymax}-$p{-ymin};
